@@ -1,0 +1,92 @@
+version: "3.7"
+
+services:
+  mqtt:
+    container_name: mqtt
+    image: "eclipse-mosquitto" 
+    ports:
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - "~/docker_data/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf"
+      - "~/docker_data/mosquitto/data:/mosquitto/data"
+      - "~/docker_data/mosquitto/log:/mosquitto/log" 
+    restart: unless-stopped
+
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: "koenkk/zigbee2mqtt"
+    ports:
+      - 8080:8080
+    devices:
+      - "/dev/ttyUSB0"
+    volumes:
+      - "~/docker_data/zigbee2mqtt/data:/app/data"
+      - "/run/udev:/run/udev:ro"
+    environment:
+      - TZ=Asia/Singapore  
+    restart: unless-stopped
+    depends_on:
+      - mqtt
+      - homeassistant
+
+  homeassistant:
+    container_name: homeassistant
+    image: "ghcr.io/home-assistant/home-assistant:stable"
+    network_mode: "host"
+    volumes:
+      - "~/docker_data/homeassistant:/config"
+    environment:
+      - TZ=Asia/Singapore  
+    privileged: true
+    restart: unless-stopped
+
+  nginx:
+    container_name: nginx
+    image: "nginx"
+    ports:
+      - 8000:80
+    volumes:
+      - "~/docker_data/nginx/EmbeddedNotes/vimwiki_html:/usr/share/nginx/html"
+    restart: unless-stopped
+
+  broadlinkmanager:
+    container_name: broadlinkmanager
+    image: techblog/broadlinkmanager
+    network_mode: host
+    volumes:
+      - ~/docker_data/broadlinkmanager:/opt/broadlinkmanager/data
+    environment:
+      - ENABLE_GOOGLE_ANALYTICS=False #Optional, default is True, Set to False if you want to disable Google Analytics
+    restart: unless-stopped
+
+  nextclouddb:
+    container_name: nextclouddb
+    image: mariadb:10.5
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    volumes:
+      - "~/docker_data/nextcloud/datadb:/var/lib/mysql"
+    environment:
+      - MYSQL_ROOT_PASSWORD=step0035
+      - MYSQL_PASSWORD=step0035
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    restart: unless-stopped
+
+
+  nextcloud:
+    container_name: nextcloud
+    image: nextcloud
+    ports:
+      - 8888:80
+    links:
+      - nextclouddb
+    volumes:
+      - "~/docker_data/nextcloud/data:/var/www/html"
+    environment:
+      - MYSQL_PASSWORD=step0035
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+      - MYSQL_HOST=nextclouddb
+    restart: unless-stopped
+
