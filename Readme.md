@@ -1,3 +1,5 @@
 ## HomeServer
 
-Run docker-compose for quick setup
+Run docker-compose in detached mode for quick setup
+
+    docker-compose -d up
