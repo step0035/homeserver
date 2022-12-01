@@ -1,92 +1,117 @@
 version: "3.7"
 
 services:
-  mqtt:
-    container_name: mqtt
-    image: "eclipse-mosquitto" 
-    ports:
-      - 1883:1883
-      - 9001:9001
+  jellyfin:
+    image: linuxserver/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
+    group_add:
+      - "109"
+    devices:
+      #- /dev/dri:/dev/dri
+      - /dev/dri/renderD128:/dev/dri/renderD128
+      - /dev/dri/card0:/dev/dri/card0
     volumes:
-      - "~/docker_data/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf"
-      - "~/docker_data/mosquitto/data:/mosquitto/data"
-      - "~/docker_data/mosquitto/log:/mosquitto/log" 
+      - /home/stephen/docker/containers/media_server/jellyfin/config:/config
+      - /home/stephen/docker/containers/media_server/media/tvshows:/data/tvshows
+      - /home/stephen/docker/containers/media_server/media/movies:/data/movies
+    ports:
+      - 8096:8096
+      - 8920:8920 #optional
+      - 7359:7359/udp #optional
+      - 1900:1900/udp #optional
     restart: unless-stopped
 
-  zigbee2mqtt:
-    container_name: zigbee2mqtt
-    image: "koenkk/zigbee2mqtt"
+  sonarr:
+    image: linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
+    volumes:
+      - /home/stephen/docker/containers/media_server/sonarr/config:/config
+      - /home/stephen/docker/containers/media_server/media/tvshows:/tv #optional
+      - /home/stephen/docker/containers/media_server/downloads/complete:/downloads #optional
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+
+  radarr:
+    image: linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
+    volumes:
+      - /home/stephen/docker/containers/media_server/radarr/config:/config
+      - /home/stephen/docker/containers/media_server/media/movies:/movies #optional
+      - /home/stephen/docker/containers/media_server/downloads/complete:/downloads #optional
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+
+  sabnzbd:
+    image: linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
+    volumes:
+      - /home/stephen/docker/containers/media_server/sabnzbd/config:/config
+      - /home/stephen/docker/containers/media_server/downloads/complete:/downloads #optional
+      - /home/stephen/docker/containers/media_server/downloads/incomplete:/incomplete-downloads #optional
     ports:
       - 8080:8080
+    dns:
+      - "192.168.1.1"
+    restart: unless-stopped
+
+  unmanic:
+    container_name: unmanic
+    image: josh5/unmanic:latest
+    ports:
+      - 8888:8888
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
     devices:
-      - "/dev/ttyUSB0"
+      - /dev/dri:/dev/dri       # For H/W transcoding using the VAAPI encoder
     volumes:
-      - "~/docker_data/zigbee2mqtt/data:/app/data"
-      - "/run/udev:/run/udev:ro"
-    environment:
-      - TZ=Asia/Singapore  
-    restart: unless-stopped
-    depends_on:
-      - mqtt
-      - homeassistant
-
-  homeassistant:
-    container_name: homeassistant
-    image: "ghcr.io/home-assistant/home-assistant:stable"
-    network_mode: "host"
-    volumes:
-      - "~/docker_data/homeassistant:/config"
-    environment:
-      - TZ=Asia/Singapore  
-    privileged: true
+      - /home/stephen/docker/containers/media_server/unmanic/config:/config
+      - /home/stephen/docker/containers/media_server/media/movies:/library/movies
+      - /home/stephen/docker/containers/media_server/media/tvshows:/library/tvshows
+      - /home/stephen/docker/containers/media_server/unmanic/cache:/tmp/unmanic
     restart: unless-stopped
 
-  nginx:
-    container_name: nginx
-    image: "nginx"
+  wireguard:
+    image: linuxserver/wireguard:latest
+    container_name: wireguard-server
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Singapore
+      - SERVERURL=auto #optional
+      - SERVERPORT=51820 #optional
+      - PEERS=2 #optional
+      - PEERDNS=auto #optional
+      - INTERNAL_SUBNET=10.13.13.0 #optional
+      - ALLOWEDIPS=0.0.0.0/0 #optional
+      - LOG_CONFS=true #optional
+    volumes:
+      - /home/stephen/docker/containers/wireguard-server/config:/config
+      - /lib/modules:/lib/modules # for kernel modules
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
     ports:
-      - 8000:80
-    volumes:
-      - "~/docker_data/nginx/EmbeddedNotes/vimwiki_html:/usr/share/nginx/html"
+      - 51820:51820/udp
     restart: unless-stopped
-
-  broadlinkmanager:
-    container_name: broadlinkmanager
-    image: techblog/broadlinkmanager
-    network_mode: host
-    volumes:
-      - ~/docker_data/broadlinkmanager:/opt/broadlinkmanager/data
-    environment:
-      - ENABLE_GOOGLE_ANALYTICS=False #Optional, default is True, Set to False if you want to disable Google Analytics
-    restart: unless-stopped
-
-  nextclouddb:
-    container_name: nextclouddb
-    image: mariadb:10.5
-    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
-    volumes:
-      - "~/docker_data/nextcloud/datadb:/var/lib/mysql"
-    environment:
-      - MYSQL_ROOT_PASSWORD=step0035
-      - MYSQL_PASSWORD=step0035
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-    restart: unless-stopped
-
-
-  nextcloud:
-    container_name: nextcloud
-    image: nextcloud
-    ports:
-      - 8888:80
-    links:
-      - nextclouddb
-    volumes:
-      - "~/docker_data/nextcloud/data:/var/www/html"
-    environment:
-      - MYSQL_PASSWORD=step0035
-      - MYSQL_DATABASE=nextcloud
-      - MYSQL_USER=nextcloud
-      - MYSQL_HOST=nextclouddb
-    restart: unless-stopped
-
