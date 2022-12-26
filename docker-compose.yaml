@@ -90,6 +90,18 @@ services:
       - /home/stephen/docker/containers/media_server/unmanic/cache:/tmp/unmanic
     restart: unless-stopped
 
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+         - LOG_LEVEL=debug
+         - TZ=Asia/Singapore
+    ports:
+         - 5055:5055
+    volumes:
+         - /home/stephen/docker/containers/media_server/jellyseerr/config:/app/config
+    restart: unless-stopped
+
   wireguard:
     image: linuxserver/wireguard:latest
     container_name: wireguard-server
