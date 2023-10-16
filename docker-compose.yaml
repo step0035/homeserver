@@ -102,28 +102,42 @@ services:
          - /home/stephen/docker/containers/media_server/jellyseerr/config:/app/config
     restart: unless-stopped
 
-  wireguard:
-    image: linuxserver/wireguard:latest
-    container_name: wireguard-server
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Singapore
-      - SERVERURL=auto #optional
-      - SERVERPORT=51820 #optional
-      - PEERS=2 #optional
-      - PEERDNS=auto #optional
-      - INTERNAL_SUBNET=10.13.13.0 #optional
-      - ALLOWEDIPS=0.0.0.0/0 #optional
-      - LOG_CONFS=true #optional
-    volumes:
-      - /home/stephen/docker/containers/wireguard-server/config:/config
-      - /lib/modules:/lib/modules # for kernel modules
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
+  mqtt:
+    container_name: mqtt
+    image: eclipse-mosquitto
     ports:
-      - 51820:51820/udp
+      - 1883:1883
+      - 9001:9001
+    volumes:
+      - /home/stephen/docker/containers/smart_home/mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - /home/stephen/docker/containers/smart_home/mosquitto/data:/mosquitto/data
+      - /home/stephen/docker/containers/smart_home/mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: koenkk/zigbee2mqtt
+    ports:
+      - 8081:8080
+    devices:
+      - /dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_f8b77f547945ed11ad45ca8f0a86e0b4-if00-port0:/dev/ttyUSB0
+    volumes:
+      - /home/stephen/docker/containers/smart_home/zigbee2mqtt/data:/app/data
+      - /run/udev:/run/udev:ro
+    environment:
+      - TZ=Asia/Singapore
+    restart: unless-stopped
+    depends_on:
+      - mqtt
+      - homeassistant
+
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    network_mode: "host"
+    volumes:
+      - /home/stephen/docker/containers/smart_home/homeassistant:/config
+    environment:
+      - TZ=Asia/Singapore
+    privileged: true
     restart: unless-stopped
