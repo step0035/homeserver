@@ -84,24 +84,6 @@ services:
       - "192.168.1.1"
     restart: unless-stopped
 
-  unmanic:
-    container_name: unmanic
-    image: josh5/unmanic:latest
-    ports:
-      - 8888:8888
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Singapore
-    devices:
-      - /dev/dri:/dev/dri       # For H/W transcoding using the VAAPI encoder
-    volumes:
-      - ${CONTAINER_DIR}/media_server/unmanic/config:/config
-      - ${SENTINEL_DIR}/media_server/media/movies:/library/movies
-      - ${SENTINEL_DIR}/media_server/media/tvshows:/library/tvshows
-      - ${CONTAINER_DIR}/media_server/unmanic/cache:/tmp/unmanic
-    restart: unless-stopped
-
   jellyseerr:
     container_name: jellyseerr
     image: fallenbagel/jellyseerr:latest
@@ -207,6 +189,10 @@ services:
       - /run/udev:/run/udev:ro
       - ${CONTAINER_DIR}/scrutiny/config:/opt/scrutiny/config
       - ${CONTAINER_DIR}/scrutiny/influxdb:/opt/scrutiny/influxdb
+    environment:
+      - DEBUG=true
+      - SCRUTINY_LOG_FILE=/tmp/web.log
+      - COLLECTOR_LOG_FILE=/tmp/collector.log
     devices:
       - /dev/sda
       - /dev/sdb
@@ -219,7 +205,7 @@ services:
     image: ghcr.io/immich-app/immich-server:release
     command: [ "start.sh", "immich" ]
     volumes:
-      - ${SENTINEL_DIR}/photos/upload:/usr/src/app/upload
+      - ${SENTINEL_DIR}/file_server/immich/upload:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
@@ -238,7 +224,7 @@ services:
     #   service: hwaccel
     command: [ "start.sh", "microservices" ]
     volumes:
-      - ${SENTINEL_DIR}/photos/upload:/usr/src/app/upload
+      - ${SENTINEL_DIR}/file_server/immich/upload:/usr/src/app/upload
       - /etc/localtime:/etc/localtime:ro
     env_file:
       - .env
@@ -251,7 +237,7 @@ services:
     container_name: immich_machine_learning
     image: ghcr.io/immich-app/immich-machine-learning:release
     volumes:
-      - ${SENTINEL_DIR}/model-cache:/cache
+      - ${SENTINEL_DIR}/file_server/immich/model-cache:/cache
     env_file:
       - .env
     restart: always
@@ -271,11 +257,54 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_DB: ${DB_DATABASE_NAME}
     volumes:
-      - ${SENTINEL_DIR}/database:/var/lib/postgresql/data
+      - ${SENTINEL_DIR}/file_server/immich/database:/var/lib/postgresql/data
     env_file:
       - .env
     restart: always
 
+  paperless-broker:
+    container_name: paperless-broker
+    image: docker.io/library/redis:7
+    restart: unless-stopped
+    volumes:
+      - ${SENTINEL_DIR}/file_server/paperless/redis:/data
+
+  paperless-db:
+    container_name: paperless-db
+    image: docker.io/library/postgres:15
+    restart: unless-stopped
+    volumes:
+      - ${SENTINEL_DIR}/file_server/paperless/database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${PAPERLESS_DB_NAME}
+      POSTGRES_USER: ${PAPERLESS_DB_USER}
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASSWORD}
+
+  paperless-webserver:
+    container_name: paperless-server
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    depends_on:
+      - paperless-db
+      - paperless-broker
+    ports:
+      - 8000:8000
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ${SENTINEL_DIR}/file_server/paperless/data:/usr/src/paperless/data
+      - ${SENTINEL_DIR}/file_server/paperless/media:/usr/src/paperless/media
+      - ${CONTAINER_DIR}/file_server/paperless/export:/usr/src/paperless/export
+      - ${CONTAINER_DIR}/file_server/paperless/consume:/usr/src/paperless/consume
+    env_file:
+      - .env
+    environment:
+      PAPERLESS_REDIS: redis://paperless-broker:6379
+      PAPERLESS_DBHOST: paperless-db
+    
   watchtower:
     container_name: watchtower
     image: containrrr/watchtower
