@@ -1,0 +1,7 @@
+# secrets
+.env
+.env.*
+# local backups
+*.bak
+# scratch
+test/
