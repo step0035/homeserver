@@ -236,7 +236,9 @@ services:
 
   paperless-db:
     container_name: paperless-db
-    image: docker.io/library/postgres:15
+    # Digest-pinned: the floating :15 tag jumped Debian 12 -> 13 (glibc 2.36 -> 2.41),
+    # which broke collation under the live DB and required a full REINDEX (2026-07-28).
+    image: docker.io/library/postgres:15@sha256:74e110c41804365e3915fcc09d5e7a1eff50161aaa94d5da0e58e0cd75ae509c
     restart: unless-stopped
     volumes:
       - ${SENTINEL_DIR}/file_server/paperless/database:/var/lib/postgresql/data
@@ -247,7 +249,10 @@ services:
 
   paperless-webserver:
     container_name: paperless-server
-    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    # Pinned to the 3.0 line: watchtower applies patch releases unattended but
+    # stops at 3.1, so a minor upgrade (schema migrations) stays a manual step.
+    # paperless-ngx publishes no bare major tag, so 3.0 is the widest safe pin.
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.0
     restart: unless-stopped
     depends_on:
       - paperless-db
@@ -271,7 +276,8 @@ services:
       PAPERLESS_DBHOST: paperless-db
 
   wikijs_db:
-    image: postgres:15-alpine
+    # Digest-pinned for the same reason as paperless-db above.
+    image: postgres:15-alpine@sha256:3d0f7584ed7d04e27fa050d6683a74746608faf21f202be78460d679cc56461f
     environment:
       POSTGRES_DB: wiki
       POSTGRES_PASSWORD: ${WIKIJS_DB_PASS}
@@ -314,7 +320,9 @@ services:
 
   watchtower:
     container_name: watchtower
-    image: containrrr/watchtower
+    # containrrr/watchtower is abandoned (last build 2023-11); its Docker API client
+    # is too old for Engine 29.x. nickfedor/watchtower is the maintained fork.
+    image: nickfedor/watchtower:1.20.1
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
